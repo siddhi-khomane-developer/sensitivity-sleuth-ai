@@ -102,7 +102,7 @@ curl -X POST http://localhost:5000/classify -H "Content-Type: application/json" 
 ***Sensitive Files***
 
 
-   ![Classification Example](public/nonsensitive.png)
+   ![Classification Example](public/non_sensitive.png)
 ***Non-Sensitive Files***
    
 
