@@ -1,3 +1,4 @@
+
 import { FileMetadata, ClassificationResult, ClassificationMetrics } from '../types';
 import { initializeModel, predictSensitivity, getModelStats } from './modelUtils';
 
@@ -30,13 +31,18 @@ export const classifyFile = async (file: File): Promise<ClassificationResult> =>
       const confidenceScore = prediction.confidenceScore;
       const sensitivity = prediction.isSensitive ? 'Sensitive' : 'Non-Sensitive';
       
-      // Determine encryption level based on confidence score
+      // Determine encryption level based on confidence score and sensitivity
       let encryptionLevel: 'Strongest' | 'Moderate' | 'Basic';
-      if (confidenceScore > 90) {
-        encryptionLevel = 'Strongest';
-      } else if (confidenceScore > 80) {
-        encryptionLevel = 'Moderate';
+      if (sensitivity === 'Sensitive') {
+        if (confidenceScore > 85) {
+          encryptionLevel = 'Strongest';
+        } else if (confidenceScore > 65) {
+          encryptionLevel = 'Moderate';
+        } else {
+          encryptionLevel = 'Basic';
+        }
       } else {
+        // Non-sensitive documents use basic encryption
         encryptionLevel = 'Basic';
       }
       

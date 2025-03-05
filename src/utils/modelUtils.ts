@@ -39,7 +39,7 @@ let modelStats: ModelStats = {
   lastTrainedDate: new Date()
 };
 
-// Generate synthetic dataset for training and testing - Improved to be more realistic
+// Generate synthetic dataset for training and testing - Rebalanced to avoid underfitting sensitive documents
 export const generateDataset = (sampleSize: number = 1000) => {
   const dataset: { features: number[]; label: number }[] = [];
   const fileTypes = ['PDF Document', 'Word Document', 'Excel Spreadsheet', 'Text File', 'CSV File', 'Image', 'Archive'];
@@ -47,9 +47,8 @@ export const generateDataset = (sampleSize: number = 1000) => {
   const locations = ['Local Upload', 'Cloud Storage', 'Network Drive'];
   const permissions = ['Read/Write', 'Read Only', 'Full Control'];
   
-  // Define rules for what makes a document sensitive
-  // Control how many sensitive vs non-sensitive examples to generate (better balance)
-  const sensitiveRatio = 0.35; // 35% of documents should be sensitive
+  // Balance between sensitive and non-sensitive - increased from 35% to 45%
+  const sensitiveRatio = 0.45; // 45% of documents should be sensitive
   
   for (let i = 0; i < sampleSize; i++) {
     // Generate random filename
@@ -60,8 +59,8 @@ export const generateDataset = (sampleSize: number = 1000) => {
     const shouldBeSensitive = Math.random() < sensitiveRatio;
     
     if (shouldBeSensitive) {
-      // This will be a sensitive file - use a sensitive keyword 80% of the time
-      const useSensitiveKeyword = Math.random() < 0.8;
+      // This will be a sensitive file - increased keyword probability from 80% to 90%
+      const useSensitiveKeyword = Math.random() < 0.9;
       
       if (useSensitiveKeyword) {
         // Include a sensitive keyword
@@ -84,9 +83,9 @@ export const generateDataset = (sampleSize: number = 1000) => {
     let fileType, extension, permission;
     
     if (isSensitive === 1) {
-      // Sensitive files are more likely to be certain types
-      const sensitiveFileTypes = ['Excel Spreadsheet', 'PDF Document'];
-      fileType = Math.random() < 0.7 
+      // Sensitive files are more likely to be certain types - increased probability from 70% to 75%
+      const sensitiveFileTypes = ['Excel Spreadsheet', 'PDF Document', 'Word Document'];
+      fileType = Math.random() < 0.75 
         ? sensitiveFileTypes[Math.floor(Math.random() * sensitiveFileTypes.length)]
         : fileTypes[Math.floor(Math.random() * fileTypes.length)];
         
@@ -94,10 +93,12 @@ export const generateDataset = (sampleSize: number = 1000) => {
         ? ['xls', 'xlsx'][Math.floor(Math.random() * 2)]
         : (fileType === 'PDF Document')
           ? 'pdf'
-          : extensions[Math.floor(Math.random() * extensions.length)];
+          : (fileType === 'Word Document')
+            ? ['doc', 'docx'][Math.floor(Math.random() * 2)]
+            : extensions[Math.floor(Math.random() * extensions.length)];
           
-      // Sensitive files often have restricted permissions
-      permission = Math.random() < 0.6
+      // Sensitive files often have restricted permissions - increased from 60% to 70%
+      permission = Math.random() < 0.7
         ? 'Read Only'
         : permissions[Math.floor(Math.random() * permissions.length)];
     } else {
@@ -156,7 +157,7 @@ const prepareData = (dataset: { features: number[]; label: number }[]) => {
 // Create and train the model
 export const trainModel = async (): Promise<ModelStats> => {
   // Generate dataset - larger dataset for better training
-  const fullDataset = generateDataset(3000);
+  const fullDataset = generateDataset(3500); // Increased from 3000 to 3500
   
   // Split into training and testing (80/20)
   const splitIndex = Math.floor(fullDataset.length * 0.8);
@@ -170,32 +171,41 @@ export const trainModel = async (): Promise<ModelStats> => {
   // Define model architecture - Using Sequential model instead of LayersModel
   model = tf.sequential();
   
-  // Enhanced model architecture with more regularization to prevent overfitting
+  // Enhanced model architecture with balanced regularization
+  // More neurons in first layer to capture complex patterns
   model.add(tf.layers.dense({ 
-    units: 16, 
+    units: 20, // Increased from 16 to 20
     activation: 'relu', 
     inputShape: [6],
-    kernelRegularizer: tf.regularizers.l2({ l2: 0.001 })
+    kernelRegularizer: tf.regularizers.l2({ l2: 0.0005 }) // Reduced from 0.001 to avoid underfitting
   }));
-  model.add(tf.layers.dropout({ rate: 0.3 }));
+  model.add(tf.layers.dropout({ rate: 0.25 })); // Reduced from 0.3 to avoid underfitting
+  
   model.add(tf.layers.dense({ 
-    units: 8, 
+    units: 12, // Increased from 8 to 12
     activation: 'relu',
-    kernelRegularizer: tf.regularizers.l2({ l2: 0.001 })
+    kernelRegularizer: tf.regularizers.l2({ l2: 0.0005 }) // Reduced from 0.001
   }));
-  model.add(tf.layers.dropout({ rate: 0.2 }));
+  model.add(tf.layers.dropout({ rate: 0.15 })); // Reduced from 0.2
+  
+  // Added an additional layer for better feature extraction
+  model.add(tf.layers.dense({ 
+    units: 6, 
+    activation: 'relu'
+  }));
+  
   model.add(tf.layers.dense({ units: 2, activation: 'softmax' })); // Output layer (2 classes)
   
-  // Compile model with more appropriate learning rate and optimizer
+  // Compile model with balanced learning rate
   model.compile({
-    optimizer: tf.train.adam(0.0005), // Lower learning rate for better generalization
+    optimizer: tf.train.adam(0.001), // Increased from 0.0005 to learn faster
     loss: 'categoricalCrossentropy',
     metrics: ['accuracy']
   });
   
   // Train model with more epochs for better convergence
   const epochs = 50;
-  const batchSize = 64; // Larger batch size
+  const batchSize = 32; // Reduced from 64 for better gradient updates
   
   try {
     await model.fit(trainXs, trainYs, {
@@ -312,7 +322,7 @@ export const prepareFileFeatures = (file: File): number[] => {
   return [hasKeyword, fileTypeId, extensionId, locationId, permissionId, logFileSize];
 };
 
-// Predict sensitivity using the trained model with threshold adjustment
+// Predict sensitivity using the trained model with adjusted threshold
 export const predictSensitivity = async (file: File): Promise<{
   isSensitive: boolean;
   confidenceScore: number;
@@ -331,16 +341,16 @@ export const predictSensitivity = async (file: File): Promise<{
     // Class 1 probability (sensitive)
     const sensitivityScore = probabilities[0][1] * 100;
     
-    // Adjust threshold to reduce false positives (non-sensitive marked as sensitive)
-    // Using 55% threshold instead of 50% to require stronger evidence for sensitive classification
-    const threshold = 55;
+    // Adjust threshold to reduce false negatives (sensitive marked as non-sensitive)
+    // Lowering threshold from 55% to 45% to catch more sensitive documents
+    const threshold = 45;
     
     // Clean up
     input.dispose();
     prediction.dispose();
     
     return {
-      isSensitive: sensitivityScore > threshold, // Using adjusted threshold
+      isSensitive: sensitivityScore > threshold,
       confidenceScore: Math.round(sensitivityScore)
     };
   } catch (error) {
@@ -358,3 +368,4 @@ export const initializeModel = async (): Promise<void> => {
     await trainModel();
   }
 };
+
