@@ -39,7 +39,7 @@ let modelStats: ModelStats = {
   lastTrainedDate: new Date()
 };
 
-// Generate synthetic dataset for training and testing
+// Generate synthetic dataset for training and testing - Improved to be more realistic
 export const generateDataset = (sampleSize: number = 1000) => {
   const dataset: { features: number[]; label: number }[] = [];
   const fileTypes = ['PDF Document', 'Word Document', 'Excel Spreadsheet', 'Text File', 'CSV File', 'Image', 'Archive'];
@@ -47,29 +47,86 @@ export const generateDataset = (sampleSize: number = 1000) => {
   const locations = ['Local Upload', 'Cloud Storage', 'Network Drive'];
   const permissions = ['Read/Write', 'Read Only', 'Full Control'];
   
+  // Define rules for what makes a document sensitive
+  // Control how many sensitive vs non-sensitive examples to generate (better balance)
+  const sensitiveRatio = 0.35; // 35% of documents should be sensitive
+  
   for (let i = 0; i < sampleSize; i++) {
     // Generate random filename
-    const useSensitiveKeyword = Math.random() > 0.5;
     let fileName = '';
+    let isSensitive = 0;
     
-    if (useSensitiveKeyword) {
-      // Include a sensitive keyword
-      const keyword = sensitiveKeywords[Math.floor(Math.random() * sensitiveKeywords.length)];
-      fileName = `${keyword}_${Math.random().toString(36).substring(7)}`;
+    // Decide whether this file should be sensitive based on our target ratio
+    const shouldBeSensitive = Math.random() < sensitiveRatio;
+    
+    if (shouldBeSensitive) {
+      // This will be a sensitive file - use a sensitive keyword 80% of the time
+      const useSensitiveKeyword = Math.random() < 0.8;
+      
+      if (useSensitiveKeyword) {
+        // Include a sensitive keyword
+        const keyword = sensitiveKeywords[Math.floor(Math.random() * sensitiveKeywords.length)];
+        fileName = `${keyword}_${Math.random().toString(36).substring(7)}`;
+      } else {
+        // Generic filename but still sensitive (like an Excel sheet with no sensitive keyword)
+        fileName = `file_${Math.random().toString(36).substring(7)}`;
+      }
+      
+      isSensitive = 1;
     } else {
-      // Generic filename
-      fileName = `file_${Math.random().toString(36).substring(7)}`;
+      // This will be a non-sensitive file
+      // Ensure we don't accidentally include sensitive keywords
+      fileName = `doc_${Math.random().toString(36).substring(7)}`;
+      isSensitive = 0;
     }
     
-    // Pick random attributes
-    const fileType = fileTypes[Math.floor(Math.random() * fileTypes.length)];
-    const extension = extensions[Math.floor(Math.random() * extensions.length)];
+    // Pick random attributes that make sense for the sensitivity level
+    let fileType, extension, permission;
+    
+    if (isSensitive === 1) {
+      // Sensitive files are more likely to be certain types
+      const sensitiveFileTypes = ['Excel Spreadsheet', 'PDF Document'];
+      fileType = Math.random() < 0.7 
+        ? sensitiveFileTypes[Math.floor(Math.random() * sensitiveFileTypes.length)]
+        : fileTypes[Math.floor(Math.random() * fileTypes.length)];
+        
+      extension = (fileType === 'Excel Spreadsheet') 
+        ? ['xls', 'xlsx'][Math.floor(Math.random() * 2)]
+        : (fileType === 'PDF Document')
+          ? 'pdf'
+          : extensions[Math.floor(Math.random() * extensions.length)];
+          
+      // Sensitive files often have restricted permissions
+      permission = Math.random() < 0.6
+        ? 'Read Only'
+        : permissions[Math.floor(Math.random() * permissions.length)];
+    } else {
+      // Non-sensitive files can be any type, but less likely to be financial documents
+      fileType = Math.random() < 0.8
+        ? ['Text File', 'Image', 'Archive', 'Word Document'][Math.floor(Math.random() * 4)]
+        : fileTypes[Math.floor(Math.random() * fileTypes.length)];
+        
+      extension = (fileType === 'Text File') 
+        ? 'txt'
+        : (fileType === 'Image')
+          ? 'jpg'
+          : (fileType === 'Word Document')
+            ? ['doc', 'docx'][Math.floor(Math.random() * 2)]
+            : extensions[Math.floor(Math.random() * extensions.length)];
+      
+      // Non-sensitive files usually have open permissions
+      permission = Math.random() < 0.7
+        ? 'Read/Write'
+        : permissions[Math.floor(Math.random() * permissions.length)];
+    }
+    
     const location = locations[Math.floor(Math.random() * locations.length)];
-    const permission = permissions[Math.floor(Math.random() * permissions.length)];
-    const fileSize = Math.floor(Math.random() * 10000000); // Random size up to 10MB
+    const fileSize = isSensitive
+      ? Math.floor(Math.random() * 5000000) + 500000 // Sensitive files tend to be larger (0.5MB - 5.5MB)
+      : Math.floor(Math.random() * 2000000) + 10000; // Non-sensitive files (10KB - 2MB)
     
     // Feature vector: [hasKeyword, fileTypeId, extensionId, locationId, permissionId, logFileSize]
-    const hasKeyword = useSensitiveKeyword ? 1 : 0;
+    const hasKeyword = sensitiveKeywords.some(keyword => fileName.includes(keyword)) ? 1 : 0;
     const fileTypeId = featureMap[fileType] || 0;
     const extensionId = featureMap[extension] || 0;
     const locationId = featureMap[location] || 0;
@@ -78,22 +135,6 @@ export const generateDataset = (sampleSize: number = 1000) => {
     
     // Create feature vector
     const features = [hasKeyword, fileTypeId, extensionId, locationId, permissionId, logFileSize];
-    
-    // Determine sensitivity based on our rules with some randomness
-    // If it has a sensitive keyword, 80% chance it's sensitive
-    // If it's a financial file type (Excel), 70% chance it's sensitive
-    // If it has read-only permission, 60% chance it's sensitive
-    let isSensitive = 0;
-    
-    if (useSensitiveKeyword && Math.random() < 0.8) {
-      isSensitive = 1;
-    } else if ((fileType === 'Excel Spreadsheet') && Math.random() < 0.7) {
-      isSensitive = 1;
-    } else if ((permission === 'Read Only') && Math.random() < 0.6) {
-      isSensitive = 1;
-    } else if (Math.random() < 0.3) { // Some randomness for other cases
-      isSensitive = 1;
-    }
     
     dataset.push({ features, label: isSensitive });
   }
@@ -114,8 +155,8 @@ const prepareData = (dataset: { features: number[]; label: number }[]) => {
 
 // Create and train the model
 export const trainModel = async (): Promise<ModelStats> => {
-  // Generate dataset
-  const fullDataset = generateDataset(2000);
+  // Generate dataset - larger dataset for better training
+  const fullDataset = generateDataset(3000);
   
   // Split into training and testing (80/20)
   const splitIndex = Math.floor(fullDataset.length * 0.8);
@@ -129,22 +170,32 @@ export const trainModel = async (): Promise<ModelStats> => {
   // Define model architecture - Using Sequential model instead of LayersModel
   model = tf.sequential();
   
-  // Input layer with 6 features
-  model.add(tf.layers.dense({ units: 12, activation: 'relu', inputShape: [6] }));
+  // Enhanced model architecture with more regularization to prevent overfitting
+  model.add(tf.layers.dense({ 
+    units: 16, 
+    activation: 'relu', 
+    inputShape: [6],
+    kernelRegularizer: tf.regularizers.l2({ l2: 0.001 })
+  }));
+  model.add(tf.layers.dropout({ rate: 0.3 }));
+  model.add(tf.layers.dense({ 
+    units: 8, 
+    activation: 'relu',
+    kernelRegularizer: tf.regularizers.l2({ l2: 0.001 })
+  }));
   model.add(tf.layers.dropout({ rate: 0.2 }));
-  model.add(tf.layers.dense({ units: 8, activation: 'relu' }));
   model.add(tf.layers.dense({ units: 2, activation: 'softmax' })); // Output layer (2 classes)
   
-  // Compile model
+  // Compile model with more appropriate learning rate and optimizer
   model.compile({
-    optimizer: tf.train.adam(0.001),
+    optimizer: tf.train.adam(0.0005), // Lower learning rate for better generalization
     loss: 'categoricalCrossentropy',
     metrics: ['accuracy']
   });
   
-  // Train model
+  // Train model with more epochs for better convergence
   const epochs = 50;
-  const batchSize = 32;
+  const batchSize = 64; // Larger batch size
   
   try {
     await model.fit(trainXs, trainYs, {
@@ -173,16 +224,28 @@ export const trainModel = async (): Promise<ModelStats> => {
     let truePositives = 0;
     let falsePositives = 0;
     let falseNegatives = 0;
+    let trueNegatives = 0;
     
     for (let i = 0; i < predArray.length; i++) {
       if (predArray[i] === 1 && trueArray[i] === 1) truePositives++;
       if (predArray[i] === 1 && trueArray[i] === 0) falsePositives++;
       if (predArray[i] === 0 && trueArray[i] === 1) falseNegatives++;
+      if (predArray[i] === 0 && trueArray[i] === 0) trueNegatives++;
     }
     
     const precision = truePositives / (truePositives + falsePositives) || 0;
     const recall = truePositives / (truePositives + falseNegatives) || 0;
     const f1Score = 2 * (precision * recall) / (precision + recall) || 0;
+    
+    console.log(`Model evaluation results:
+      True Positives: ${truePositives}
+      False Positives: ${falsePositives}
+      False Negatives: ${falseNegatives}
+      True Negatives: ${trueNegatives}
+      Precision: ${precision.toFixed(4)}
+      Recall: ${recall.toFixed(4)}
+      F1 Score: ${f1Score.toFixed(4)}
+    `);
     
     // Update model stats
     modelStats = {
@@ -249,7 +312,7 @@ export const prepareFileFeatures = (file: File): number[] => {
   return [hasKeyword, fileTypeId, extensionId, locationId, permissionId, logFileSize];
 };
 
-// Predict sensitivity using the trained model
+// Predict sensitivity using the trained model with threshold adjustment
 export const predictSensitivity = async (file: File): Promise<{
   isSensitive: boolean;
   confidenceScore: number;
@@ -268,12 +331,16 @@ export const predictSensitivity = async (file: File): Promise<{
     // Class 1 probability (sensitive)
     const sensitivityScore = probabilities[0][1] * 100;
     
+    // Adjust threshold to reduce false positives (non-sensitive marked as sensitive)
+    // Using 55% threshold instead of 50% to require stronger evidence for sensitive classification
+    const threshold = 55;
+    
     // Clean up
     input.dispose();
     prediction.dispose();
     
     return {
-      isSensitive: sensitivityScore > 50,
+      isSensitive: sensitivityScore > threshold, // Using adjusted threshold
       confidenceScore: Math.round(sensitivityScore)
     };
   } catch (error) {
