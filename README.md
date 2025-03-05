@@ -18,7 +18,7 @@ This project aims to build an AI-powered document classification system that det
 ## Installation & Running Instructions
 
 **1. Clone the Repository**
-git clone https://github.com/yourusername/ai-sensitive-doc-classification.git
+git clone https://github.com/siddhi-khomane-developer/sensitivity-sleuth-ai.git
 cd ai-sensitive-doc-classification
 
 **2. Install Backend Dependencies**
