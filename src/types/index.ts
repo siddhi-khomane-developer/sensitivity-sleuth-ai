@@ -26,3 +26,22 @@ export interface ClassificationResult {
 }
 
 export type SensitivityFeedback = 'correct' | 'incorrect';
+
+export interface ModelStats {
+  accuracy: number;
+  precision: number;
+  recall: number;
+  f1Score: number;
+  trainingSamples: number;
+  testingSamples: number;
+  lastTrainedDate: Date;
+}
+
+export interface ClassificationMetrics {
+  totalClassified: number;
+  sensitiveCount: number;
+  nonSensitiveCount: number;
+  averageConfidence: number;
+  byFileType: Record<string, number>;
+  byEncryptionLevel: Record<string, number>;
+}

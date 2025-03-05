@@ -1,34 +1,34 @@
+import { FileMetadata, ClassificationResult, ClassificationMetrics } from '../types';
+import { initializeModel, predictSensitivity, getModelStats } from './modelUtils';
 
-import { FileMetadata, ClassificationResult } from '../types';
+// Initialize model in the background 
+let isModelInitializing = false;
+const ensureModelInitialized = async () => {
+  if (!isModelInitializing) {
+    isModelInitializing = true;
+    await initializeModel();
+  }
+};
+// Start initializing when the app loads
+ensureModelInitialized();
 
-// Mock classification function (in a real app, this would call the backend API)
-export const classifyFile = (file: File): Promise<ClassificationResult> => {
-  return new Promise((resolve) => {
-    // Simulate API call with a timeout
-    setTimeout(() => {
-      const metadata = extractMetadata(file);
-      const sensitiveKeywords = [
-        'pan', 'aadhar', 'passport', 'bank', 'statement', 'financial', 
-        'medical', 'health', 'insurance', 'tax', 'salary', 'personal',
-        'confidential', 'private', 'secret', 'social', 'security'
-      ];
+// Classify file using the ML model
+export const classifyFile = async (file: File): Promise<ClassificationResult> => {
+  return new Promise(async (resolve) => {
+    // Ensure model is initialized
+    if (!isModelInitializing) {
+      await ensureModelInitialized();
+    }
+    
+    // Start with extracting metadata
+    const metadata = extractMetadata(file);
+    
+    try {
+      // Predict using the model
+      const prediction = await predictSensitivity(file);
       
-      // Check if filename or path contains sensitive keywords
-      const fileName = file.name.toLowerCase();
-      const hasSensitiveKeyword = sensitiveKeywords.some(keyword => 
-        fileName.includes(keyword)
-      );
-      
-      // Generate a pseudorandom confidence score that would be consistent for the same file name
-      // (In a real app, this would be determined by the ML model)
-      const hash = simpleHash(file.name);
-      const baseConfidence = (hash % 30) + 70; // Range between 70-99
-      const confidenceScore = hasSensitiveKeyword 
-        ? Math.min(baseConfidence + 10, 99) 
-        : baseConfidence;
-      
-      // Determine sensitivity based on confidence score
-      const sensitivity = confidenceScore > 80 ? 'Sensitive' : 'Non-Sensitive';
+      const confidenceScore = prediction.confidenceScore;
+      const sensitivity = prediction.isSensitive ? 'Sensitive' : 'Non-Sensitive';
       
       // Determine encryption level based on confidence score
       let encryptionLevel: 'Strongest' | 'Moderate' | 'Basic';
@@ -51,8 +51,62 @@ export const classifyFile = (file: File): Promise<ClassificationResult> => {
         encryptionLevel,
         classifiedAt: new Date()
       });
-    }, 1500);
+    } catch (error) {
+      console.error("Error classifying file with ML model:", error);
+      // Fallback to rule-based classification if ML fails
+      const result = fallbackClassification(file);
+      resolve(result);
+    }
   });
+};
+
+// Fallback classification method (rule-based, used if ML fails)
+const fallbackClassification = (file: File): ClassificationResult => {
+  const metadata = extractMetadata(file);
+  const sensitiveKeywords = [
+    'pan', 'aadhar', 'passport', 'bank', 'statement', 'financial', 
+    'medical', 'health', 'insurance', 'tax', 'salary', 'personal',
+    'confidential', 'private', 'secret', 'social', 'security'
+  ];
+  
+  // Check if filename or path contains sensitive keywords
+  const fileName = file.name.toLowerCase();
+  const hasSensitiveKeyword = sensitiveKeywords.some(keyword => 
+    fileName.includes(keyword)
+  );
+  
+  // Generate a pseudorandom confidence score that would be consistent for the same file name
+  // (This is our fallback method)
+  const hash = simpleHash(file.name);
+  const baseConfidence = (hash % 30) + 70; // Range between 70-99
+  const confidenceScore = hasSensitiveKeyword 
+    ? Math.min(baseConfidence + 10, 99) 
+    : baseConfidence;
+  
+  // Determine sensitivity based on confidence score
+  const sensitivity = confidenceScore > 80 ? 'Sensitive' : 'Non-Sensitive';
+  
+  // Determine encryption level based on confidence score
+  let encryptionLevel: 'Strongest' | 'Moderate' | 'Basic';
+  if (confidenceScore > 90) {
+    encryptionLevel = 'Strongest';
+  } else if (confidenceScore > 80) {
+    encryptionLevel = 'Moderate';
+  } else {
+    encryptionLevel = 'Basic';
+  }
+  
+  return {
+    id: generateUniqueId(),
+    fileName: file.name,
+    filePath: file.webkitRelativePath || `/${file.name}`,
+    fileType: determineFileType(file),
+    extension: getFileExtension(file.name),
+    sensitivity,
+    confidenceScore,
+    encryptionLevel,
+    classifiedAt: new Date()
+  };
 };
 
 // Helper function to extract metadata from a file
@@ -212,4 +266,39 @@ export const getClassificationHistory = (): Promise<ClassificationResult[]> => {
       resolve(mockHistory);
     }, 1000);
   });
+};
+
+// Get classification metrics for dashboard
+export const getClassificationMetrics = async (): Promise<ClassificationMetrics> => {
+  const history = await getClassificationHistory();
+  
+  const sensitiveCount = history.filter(item => item.sensitivity === 'Sensitive').length;
+  const nonSensitiveCount = history.filter(item => item.sensitivity === 'Non-Sensitive').length;
+  const totalConfidence = history.reduce((sum, item) => sum + item.confidenceScore, 0);
+  
+  // Count by file type
+  const byFileType: Record<string, number> = {};
+  history.forEach(item => {
+    byFileType[item.fileType] = (byFileType[item.fileType] || 0) + 1;
+  });
+  
+  // Count by encryption level
+  const byEncryptionLevel: Record<string, number> = {
+    'Strongest': 0,
+    'Moderate': 0,
+    'Basic': 0
+  };
+  
+  history.forEach(item => {
+    byEncryptionLevel[item.encryptionLevel] = (byEncryptionLevel[item.encryptionLevel] || 0) + 1;
+  });
+  
+  return {
+    totalClassified: history.length,
+    sensitiveCount,
+    nonSensitiveCount,
+    averageConfidence: history.length > 0 ? totalConfidence / history.length : 0,
+    byFileType,
+    byEncryptionLevel
+  };
 };

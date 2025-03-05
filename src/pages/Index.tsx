@@ -7,7 +7,7 @@ import Navbar from '../components/Navbar';
 import { toast } from '@/components/ui/use-toast';
 import { ClassificationResult as ClassificationResultType, SensitivityFeedback } from '../types';
 import { classifyFile, submitFeedback } from '../utils/classificationUtils';
-import { Button } from '@/components/ui/card';
+import { Button } from '@/components/ui/button'; // Fix the import
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('upload');
