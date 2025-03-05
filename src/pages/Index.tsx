@@ -146,7 +146,7 @@ const Index = () => {
       <footer className="border-t py-4 bg-background">
         <div className="container flex justify-between items-center">
           <p className="text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} SensitivitySleuth AI
+            &copy; {new Date().getFullYear()} MetaShield AI
           </p>
           <p className="text-sm text-muted-foreground">
             Protect your sensitive documents with confidence

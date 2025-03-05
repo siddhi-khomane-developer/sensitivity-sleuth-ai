@@ -204,7 +204,7 @@ const Dashboard: React.FC = () => {
           
           <Card className="glass-card mt-6">
             <CardHeader>
-              <CardTitle className="text-base font-semibold">ML Model Performance</CardTitle>
+              <CardTitle className="text-base font-semibold">Model Performance</CardTitle>
               <CardDescription>
                 Current model metrics and statistics
               </CardDescription>
