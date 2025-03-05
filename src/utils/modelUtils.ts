@@ -27,7 +27,7 @@ const sensitiveKeywords = [
   'credit', 'debit', 'card', 'ssn', 'dob', 'birth'
 ];
 
-let model: tf.LayersModel | null = null;
+let model: tf.Sequential | null = null;
 let isModelLoaded = false;
 let modelStats: ModelStats = {
   accuracy: 0,
@@ -126,7 +126,7 @@ export const trainModel = async (): Promise<ModelStats> => {
   const { xs: trainXs, ys: trainYs } = prepareData(trainingData);
   const { xs: testXs, ys: testYs } = prepareData(testingData);
   
-  // Define model architecture
+  // Define model architecture - Using Sequential model instead of LayersModel
   model = tf.sequential();
   
   // Input layer with 6 features
