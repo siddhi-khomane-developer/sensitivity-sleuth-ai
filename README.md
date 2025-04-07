@@ -21,7 +21,7 @@ This project aims to build an AI-powered document classification system that det
 git clone https://github.com/siddhi-khomane-developer/sensitivity-sleuth-ai.git
 cd ai-sensitive-doc-classification
 
-**2. Install Backend Dependencies**
+**2. Install the Backend Dependencies**
 cd backend
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
